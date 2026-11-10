@@ -9,9 +9,9 @@ The application reads secrets and deployment-specific addresses from process env
 Required for authentication and database access:
 
 - `JWT_SECRET` — at least 32 random bytes for HS256 signing.
-- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` — defaults point to a local PostgreSQL database; set the password for your local instance.
+- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` — defaults point to a separate local `ledger_dev` database. Create it before starting the application; set the password for your local instance. Do not point LedgerLine migrations at an unrelated or existing ecommerce database without reviewing its schema first.
 - `REDIS_HOST`, `REDIS_PORT` — defaults to local Redis. Redis backs login rate limiting.
-- `FLYWAY_DB_URL`, `FLYWAY_DB_USERNAME`, `FLYWAY_DB_PASSWORD` — optional separate migration connection; by default Flyway inherits the application DB connection. Use a schema-migration role in deployed environments and give the runtime role only the DML and sequence privileges it needs.
+- `FLYWAY_DB_URL`, `FLYWAY_DB_USERNAME`, `FLYWAY_DB_PASSWORD` — separate schema migration connection. Configure `ledger_migrator` here and `ledger_app` for `DB_*`; give the runtime role only the DML and sequence privileges it needs.
 - `CORS_ALLOWED_ORIGINS` — comma-separated frontend origins; defaults to the local origins and dev-tunnel origin listed in `src/main/resources/application.yml`.
 
 The default local file upload limits are 10 MB per file and 20 MB per request. Database and JWT credentials must be supplied through environment variables; do not add them as plaintext YAML values.
@@ -28,10 +28,13 @@ Start the API from PowerShell:
 
 ```powershell
 cd P:\ledger
+$env:DB_URL = 'jdbc:postgresql://localhost:5432/ledger_dev'
+$env:DB_USERNAME = 'ledger_app'
+$env:DB_PASSWORD = '<the ledger_app password you entered during role setup>'
+$env:FLYWAY_DB_URL = $env:DB_URL
+$env:FLYWAY_DB_USERNAME = 'ledger_migrator'
+$env:FLYWAY_DB_PASSWORD = '<the ledger_migrator password you entered during role setup>'
 $env:JWT_SECRET = '<generate a random value of at least 32 bytes>'
-$env:DB_URL = 'jdbc:postgresql://localhost:5432/ecommerce_dev'
-$env:DB_USERNAME = 'postgres'
-$env:DB_PASSWORD = '<your local database password>'
 $env:REDIS_HOST = 'localhost'
 $env:REDIS_PORT = '6379'
 .\mvnw.cmd spring-boot:run
@@ -82,6 +85,6 @@ Versioned Flyway SQL lives in `src/main/resources/db/migration`. Flyway applies 
 
 `database/bootstrap-roles.sql` provisions a `ledger_migrator` login and a separate `ledger_app` runtime login, then grants the runtime account table DML and sequence access. Run it with a PostgreSQL administrator in a protected session, supplying the `migrator_password` and `app_password` psql variables through your approved secret-management process. Configure `FLYWAY_DB_*` with the migrator credentials and `DB_*` with the runtime credentials. The script does not grant role-admin rights to the application. Some managed PostgreSQL services restrict `CREATE ROLE`; use the provider's role management and equivalent grants in that case.
 
-For an interactive local PostgreSQL administrator login, run `psql --host localhost --username postgres --dbname ecommerce_dev --file database/bootstrap-roles.sql`. The script prompts for the two new passwords without echoing them. It is safe to rerun to rotate those passwords and reapply the grants. In automation, supply `migrator_password` and `app_password` as protected psql variables rather than storing them in this file.
+For local setup, create the dedicated database with `createdb --host localhost --username postgres ledger_dev`, then run `psql --host localhost --username postgres --dbname ledger_dev --file database/bootstrap-roles.sql`. The script prompts for the two new passwords without echoing them. It is safe to rerun to rotate those passwords and reapply the grants. In automation, supply `migrator_password` and `app_password` as protected psql variables rather than storing them in this file.
 
 For an existing schema whose tables were created by another owner, the migrator may need a DBA-reviewed ownership or grants plan for future `ALTER TABLE` migrations. Do not transfer ownership or run bootstrap SQL against a live database without reviewing its current roles and data. CI starts a clean PostgreSQL and Redis pair and runs the application context plus role-boundary tests against the migration.
