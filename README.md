@@ -11,6 +11,7 @@ Required for authentication and database access:
 - `JWT_SECRET` — at least 32 random bytes for HS256 signing.
 - `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` — defaults point to a local PostgreSQL database; set the password for your local instance.
 - `REDIS_HOST`, `REDIS_PORT` — defaults to local Redis. Redis backs login rate limiting.
+- `FLYWAY_DB_URL`, `FLYWAY_DB_USERNAME`, `FLYWAY_DB_PASSWORD` — optional separate migration connection; by default Flyway inherits the application DB connection. Use a schema-migration role in deployed environments and give the runtime role only the DML and sequence privileges it needs.
 - `CORS_ALLOWED_ORIGINS` — comma-separated frontend origins; defaults to the local origins and dev-tunnel origin listed in `src/main/resources/application.yml`.
 
 The default local file upload limits are 10 MB per file and 20 MB per request. Database and JWT credentials must be supplied through environment variables; do not add them as plaintext YAML values.
@@ -75,6 +76,10 @@ Build the API image with `docker build -t ledger-backend .` and run it with Post
 
 Do not enable the first-admin bootstrap with real credentials until database access is configured. After a successful bootstrap, disable it. Never use the sample values in `.env.example` as deployment credentials.
 
-## Current schema-management note
+## Database migrations and roles
 
-The checked-in backend currently uses Hibernate `ddl-auto: update`; there are no versioned Flyway/Liquibase migrations or database-role provisioning scripts in this repository. The DB login is environment-configurable, but moving to a least-privilege runtime role requires versioned schema migrations and a DBA-reviewed grants plan before disabling schema updates. No automatic role grants are performed by this application. The container and CI workflows do not change this schema-management limitation.
+Versioned Flyway SQL lives in `src/main/resources/db/migration`. Flyway applies migrations during startup; Hibernate then validates the mapped schema and does not create or alter tables. The initial migration creates the eight current JPA entity tables. It uses `IF NOT EXISTS` to support a database previously initialized by Hibernate, but existing production data and object ownership must be reviewed before applying it. Back up existing data and run migrations against a staging copy first.
+
+`database/bootstrap-roles.sql` provisions a `ledger_migrator` login and a separate `ledger_app` runtime login, then grants the runtime account table DML and sequence access. Run it with a PostgreSQL administrator in a protected session, supplying the `migrator_password` and `app_password` psql variables through your approved secret-management process. Configure `FLYWAY_DB_*` with the migrator credentials and `DB_*` with the runtime credentials. The script does not grant role-admin rights to the application. Some managed PostgreSQL services restrict `CREATE ROLE`; use the provider's role management and equivalent grants in that case.
+
+For an existing schema whose tables were created by another owner, the migrator may need a DBA-reviewed ownership or grants plan for future `ALTER TABLE` migrations. Do not transfer ownership or run bootstrap SQL against a live database without reviewing its current roles and data. CI starts a clean PostgreSQL and Redis pair and runs the application context plus role-boundary tests against the migration.

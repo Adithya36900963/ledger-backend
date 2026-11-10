@@ -7,8 +7,31 @@ on:
     branches: [main]
 
 jobs:
-  role-access-tests:
+  backend-tests-with-migrations:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ledger_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ledger_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -16,5 +39,24 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Run role-boundary tests
-        run: ./mvnw -B -Dtest=LedgerRoleAccessTests test
+      - name: Provision separate migration and runtime roles
+        env:
+          PGPASSWORD: ci-postgres-password
+          MIGRATOR_PASSWORD: ci-migrator-password
+          APP_PASSWORD: ci-app-password
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+          psql --host localhost --username postgres --dbname ledger_test --set ON_ERROR_STOP=1 --set migrator_password="$MIGRATOR_PASSWORD" --set app_password="$APP_PASSWORD" --file database/bootstrap-roles.sql
+      - name: Run backend tests and migration-backed application startup
+        env:
+          JWT_SECRET: test-only-ledger-signing-secret-at-least-32-bytes
+          DB_URL: jdbc:postgresql://localhost:5432/ledger_test
+          DB_USERNAME: ledger_app
+          DB_PASSWORD: ci-app-password
+          FLYWAY_DB_URL: jdbc:postgresql://localhost:5432/ledger_test
+          FLYWAY_DB_USERNAME: ledger_migrator
+          FLYWAY_DB_PASSWORD: ci-migrator-password
+          REDIS_HOST: localhost
+          REDIS_PORT: '6379'
+        run: ./mvnw -B test

@@ -20,9 +20,17 @@ spring:
     password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
+  flyway:
+    enabled: true
+    url: ${FLYWAY_DB_URL:${DB_URL:jdbc:postgresql://localhost:5432/ecommerce_dev}}
+    user: ${FLYWAY_DB_USERNAME:${DB_USERNAME:postgres}}
+    password: ${FLYWAY_DB_PASSWORD:${DB_PASSWORD:}}
+    baseline-on-migrate: true
+    baseline-version: 0
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${JPA_DDL_AUTO:validate}
     show-sql: false
     properties:
       hibernate:
