@@ -11,7 +11,9 @@ Required for authentication and database access:
 - `JWT_SECRET` — at least 32 random bytes for HS256 signing.
 - `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` — defaults point to a local PostgreSQL database; set the password for your local instance.
 - `REDIS_HOST`, `REDIS_PORT` — defaults to local Redis. Redis backs login rate limiting.
-- `CORS_ALLOWED_ORIGINS` — comma-separated frontend origins; defaults to `http://localhost:5173`.
+- `CORS_ALLOWED_ORIGINS` — comma-separated frontend origins; defaults to the local origins and dev-tunnel origin listed in `src/main/resources/application.yml`.
+
+The default local file upload limits are 10 MB per file and 20 MB per request. Database and JWT credentials must be supplied through environment variables; do not add them as plaintext YAML values.
 
 Optional integrations:
 

@@ -41,3 +41,11 @@ AI assistance is allowed for this assessment. These entries are transparent retr
 - **What was wrong:** Earlier assumptions about PostgreSQL role membership and permission to administer a different role were incorrect; a wider grant would have hidden the real issue.
 - **What I changed instead:** Documented the actual repository state and avoided automatic role grants. Migration and least-privilege provisioning still need an explicit, reviewed implementation.
 - **Commit:** [592c758 — add Ledger backend setup guide](https://github.com/Adithya36900963/ledger-backend/commit/592c758).
+
+## 2026-11-11 — Merge local application settings safely
+
+- **What I asked:** Add my updated `application.yml` settings to the backend.
+- **What the tool produced:** Merged the multipart limits, requested local CORS origins, and logging levels into the existing configuration.
+- **What was wrong:** The pasted YAML repeated top-level `spring` and `app` keys, which can cause settings to be overwritten, and included plaintext database/JWT credential values.
+- **What I changed instead:** Kept one `spring` section and one `app` section, used the existing environment-variable placeholders for secrets, and added the non-secret settings. I advised rotating the pasted credentials.
+- **Commit:** [0b67b7c — add multipart limits and local CORS origins](https://github.com/Adithya36900963/ledger-backend/commit/0b67b7c).
