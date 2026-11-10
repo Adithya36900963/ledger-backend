@@ -58,10 +58,10 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
-        <!-- Versioned PostgreSQL schema migrations run before Hibernate validation. -->
+        <!-- Spring Boot 4 Flyway auto-configuration and versioned PostgreSQL migrations. -->
         <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
