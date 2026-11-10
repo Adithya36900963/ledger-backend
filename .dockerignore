@@ -1,0 +1,9 @@
+.git
+.github
+.vscode
+target
+error.txt
+*.log
+.env
+.env.*
+!.env.example
