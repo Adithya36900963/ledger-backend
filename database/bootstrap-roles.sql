@@ -1,7 +1,15 @@
 \set ON_ERROR_STOP on
 
--- Run as a database owner/administrator. Supply psql variables through a
--- protected secret manager or secure interactive session, never commit values.
+-- Run as a database owner/administrator. Passwords are requested without echo
+-- unless an automation supplies psql variables (the CI workflow uses test-only values).
+\if :{?migrator_password}
+\else
+\prompt -s 'New password for ledger_migrator: ' migrator_password
+\endif
+\if :{?app_password}
+\else
+\prompt -s 'New password for ledger_app: ' app_password
+\endif
 SELECT format('CREATE ROLE ledger_migrator LOGIN PASSWORD %L', :'migrator_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ledger_migrator')
 \gexec
