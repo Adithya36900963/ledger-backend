@@ -21,6 +21,8 @@ Optional integrations:
 - `WHATSAPP_API_URL`, `WHATSAPP_API_BASE` for mobile verification links.
 - `JWT_REFRESH_SECRET`, `JWT_EXPIRATION_MS`, `JWT_REFRESH_EXPIRATION_MS` to override token defaults.
 
+Use `.env.example` as the list of backend variables to configure in your shell, IDE, or hosting provider. Spring Boot does not automatically load a `.env` file. Keep real credentials out of `.env.example` and source control.
+
 Start the API from PowerShell:
 
 ```powershell
@@ -67,6 +69,12 @@ mvn -o -Dtest=LedgerRoleAccessTests test
 
 These unit tests do not replace end-to-end checks against a configured database and Redis instance.
 
+## Container deployment
+
+Build the API image with `docker build -t ledger-backend .` and run it with PostgreSQL and Redis addresses plus the required secrets supplied by the hosting platform. The container listens on port 8080 and runs as an unprivileged user. Configure the host's health probe to use `/api/health/ready`; the readiness endpoint requires both PostgreSQL and Redis. The frontend must be deployed separately with `VITE_API_URL` pointing to the API origin, and that origin must allow the deployed frontend origin through `CORS_ALLOWED_ORIGINS`.
+
+Do not enable the first-admin bootstrap with real credentials until database access is configured. After a successful bootstrap, disable it. Never use the sample values in `.env.example` as deployment credentials.
+
 ## Current schema-management note
 
-The checked-in backend currently uses Hibernate `ddl-auto: update`; there are no versioned Flyway/Liquibase migrations or database-role provisioning scripts in this repository. The DB login is environment-configurable, but moving to a least-privilege runtime role requires versioned schema migrations and a DBA-reviewed grants plan before disabling schema updates. No automatic role grants are performed by this application.
+The checked-in backend currently uses Hibernate `ddl-auto: update`; there are no versioned Flyway/Liquibase migrations or database-role provisioning scripts in this repository. The DB login is environment-configurable, but moving to a least-privilege runtime role requires versioned schema migrations and a DBA-reviewed grants plan before disabling schema updates. No automatic role grants are performed by this application. The container and CI workflows do not change this schema-management limitation.
