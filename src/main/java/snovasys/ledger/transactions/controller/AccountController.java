@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import snovasys.ledger.transactions.model.OpenAccountRequest;
 import snovasys.ledger.transactions.service.AccountService;
 import snovasys.ledger.transactions.service.AccountService.AccountSummary;
+import snovasys.ledger.transactions.service.AccountService.RecipientSummary;
 
 @RestController @RequestMapping("/api/ledger/accounts") @RequiredArgsConstructor
 public class AccountController {
@@ -14,6 +15,11 @@ public class AccountController {
     @GetMapping("/me")
     public AccountSummary current(Authentication authentication) {
         return accountService.current(authentication);
+    }
+
+    @GetMapping("/{accountId}/recipient")
+    public RecipientSummary recipient(Authentication authentication, @PathVariable Long accountId) {
+        return accountService.recipient(authentication, accountId);
     }
 
     @PostMapping

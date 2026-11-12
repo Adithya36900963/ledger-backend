@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -17,6 +18,8 @@ import snovasys.ledger.transactions.entity.LedgerEntry;
 import snovasys.ledger.transactions.model.TransactionRequest;
 import snovasys.ledger.transactions.repository.BankAccountRepository;
 import snovasys.ledger.transactions.repository.LedgerEntryRepository;
+import snovasys.ledger.transactions.repository.TransferIdempotencyRepository;
+import snovasys.ledger.transactions.entity.TransferIdempotency;
 import snovasys.ledger.audit.service.AuditLogService;
 import snovasys.ledger.users.entity.ACCOUNT_HOLDER;
 import snovasys.ledger.users.entity.User;
@@ -32,6 +35,7 @@ public class TransactionPostingService {
     private final ACCOUNT_HOLDERRepo holders;
     private final AuditLogService auditLog;
     private final MpinService mpinService;
+    private final TransferIdempotencyRepository transferKeys;
 
     @Transactional
     public TransactionResult deposit(Authentication auth, TransactionRequest request) {
@@ -78,12 +82,16 @@ public class TransactionPostingService {
     }
 
     @Transactional
-    public TransactionResult transfer(Authentication auth, TransactionRequest request) {
+    public TransactionResult transfer(Authentication auth, TransactionRequest request, String idempotencyKey) {
         User user = authenticated(auth);
         requireRole(user, Role.ACCOUNT_HOLDER);
         mpinService.verify(user, request.getMpin());
+        validateIdempotencyKey(idempotencyKey);
+        BigDecimal amount = amount(request);
         if (request.getDestinationAccountId() == null)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "destinationAccountId is required");
+        Optional<TransferIdempotency> prior = transferKeys.findById(idempotencyKey);
+        if (prior.isPresent()) return replay(prior.get(), user, request, amount);
         BankAccount source = ownAccount(user, false);
         if (source.getId().equals(request.getDestinationAccountId()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and destination accounts must differ");
@@ -92,11 +100,12 @@ public class TransactionPostingService {
         Long secondId = Math.max(source.getId(), request.getDestinationAccountId());
         BankAccount first = locked(firstId);
         BankAccount second = locked(secondId);
+        prior = transferKeys.findById(idempotencyKey);
+        if (prior.isPresent()) return replay(prior.get(), user, request, amount);
         if (first.isSystemAccount() || second.isSystemAccount())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transfers must use customer accounts");
         source = source.getId().equals(firstId) ? first : second;
         BankAccount destination = source.getId().equals(firstId) ? second : first;
-        BigDecimal amount = amount(request);
         ensureFunds(source, amount);
         Instant now = Instant.now();
         String tx = UUID.randomUUID().toString();
@@ -106,7 +115,45 @@ public class TransactionPostingService {
         entries.save(entry(tx, destination, amount, "TRANSFER", now));
         auditLog.record(auth, "TRANSFER", "POSTED", "transactionId=" + tx + ", fromAccountId=" + source.getId()
                 + ", toAccountId=" + destination.getId() + ", amount=" + amount);
-        return new TransactionResult(tx, "TRANSFER", source.getId(), destination.getId(), amount, source.getBalance(), now);
+        TransactionResult result = new TransactionResult(tx, "TRANSFER", source.getId(), destination.getId(), amount, source.getBalance(), now);
+        TransferIdempotency keyRecord = new TransferIdempotency();
+        keyRecord.setIdempotencyKey(idempotencyKey);
+        keyRecord.setUserId(user.getId());
+        keyRecord.setDestinationAccountId(destination.getId());
+        keyRecord.setAmount(amount);
+        keyRecord.setTransactionId(tx);
+        keyRecord.setFromAccountId(source.getId());
+        keyRecord.setToAccountId(destination.getId());
+        keyRecord.setResultBalance(source.getBalance());
+        keyRecord.setCreatedAt(now);
+        transferKeys.saveAndFlush(keyRecord);
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<TransactionResult> replayTransfer(Authentication auth, TransactionRequest request, String idempotencyKey) {
+        User user = authenticated(auth);
+        requireRole(user, Role.ACCOUNT_HOLDER);
+        validateIdempotencyKey(idempotencyKey);
+        BigDecimal amount = amount(request);
+        return transferKeys.findById(idempotencyKey).map(record -> replay(record, user, request, amount));
+    }
+
+    private TransactionResult replay(TransferIdempotency record, User user, TransactionRequest request, BigDecimal amount) {
+        if (!record.getUserId().equals(user.getId())
+                || !record.getDestinationAccountId().equals(request.getDestinationAccountId())
+                || record.getAmount().compareTo(amount) != 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This payment key was already used for a different transfer");
+        }
+        return new TransactionResult(record.getTransactionId(), "TRANSFER", record.getFromAccountId(),
+                record.getToAccountId(), record.getAmount(), record.getResultBalance(), record.getCreatedAt());
+    }
+
+    private void validateIdempotencyKey(String key) {
+        if (key == null || !key.matches("[A-Za-z0-9._:-]{16,100}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid Idempotency-Key header is required");
+        }
     }
 
     private User authenticated(Authentication auth) {

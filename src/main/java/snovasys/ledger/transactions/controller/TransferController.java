@@ -9,6 +9,7 @@ import snovasys.ledger.transactions.service.TransactionResult;
 import snovasys.ledger.transactions.service.TransferService;
 import snovasys.ledger.audit.service.AuditLogService;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.dao.DataIntegrityViolationException;
 import java.util.List;
 import snovasys.ledger.transactions.model.TransferHistoryView;
 import snovasys.ledger.transactions.service.LedgerReadService;
@@ -23,8 +24,13 @@ public class TransferController {
         return ledgerReadService.myTransfers(authentication);
     }
     @PostMapping
-    public TransactionResult transfer(Authentication authentication, @Valid @RequestBody TransactionRequest request) {
-        try { return transferService.transfer(authentication, request); }
+    public TransactionResult transfer(Authentication authentication,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody TransactionRequest request) {
+        try { return transferService.transfer(authentication, request, idempotencyKey); }
+        catch (DataIntegrityViolationException exception) {
+            return transferService.replay(authentication, request, idempotencyKey).orElseThrow(() -> exception);
+        }
         catch (ResponseStatusException exception) {
             auditLog.recordFailure(authentication, "TRANSFER", exception.getReason());
             throw exception;

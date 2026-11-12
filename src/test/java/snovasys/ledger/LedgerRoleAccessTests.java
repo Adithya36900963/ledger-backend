@@ -19,6 +19,7 @@ import snovasys.ledger.transactions.model.OpenAccountRequest;
 import snovasys.ledger.transactions.model.TransactionRequest;
 import snovasys.ledger.transactions.repository.BankAccountRepository;
 import snovasys.ledger.transactions.repository.LedgerEntryRepository;
+import snovasys.ledger.transactions.repository.TransferIdempotencyRepository;
 import snovasys.ledger.transactions.service.AccountService;
 import snovasys.ledger.transactions.service.LedgerReadService;
 import snovasys.ledger.transactions.service.TransactionPostingService;
@@ -33,6 +34,7 @@ class LedgerRoleAccessTests {
     private final ACCOUNT_HOLDERRepo holders = mock(ACCOUNT_HOLDERRepo.class);
     private final AuditLogService auditLog = mock(AuditLogService.class);
     private final MpinService mpinService = mock(MpinService.class);
+    private final TransferIdempotencyRepository transferKeys = mock(TransferIdempotencyRepository.class);
 
     @Test
     void auditorCannotOpenAnAccount() {
@@ -49,13 +51,13 @@ class LedgerRoleAccessTests {
 
     @Test
     void auditorCannotPostAWithdrawal() {
-        TransactionPostingService service = new TransactionPostingService(accounts, entries, holders, auditLog, mpinService);
+        TransactionPostingService service = new TransactionPostingService(accounts, entries, holders, auditLog, mpinService, transferKeys);
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> service.withdraw(authentication(Role.AUDITOR), mock(TransactionRequest.class)));
 
         assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
-        verifyNoInteractions(accounts, entries, holders, auditLog, mpinService);
+        verifyNoInteractions(accounts, entries, holders, auditLog, mpinService, transferKeys);
     }
 
     @Test

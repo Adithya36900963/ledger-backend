@@ -35,6 +35,20 @@ public class AccountService {
         return new AccountSummary(account.getId(), holder.getId(), holder.getUser().getUsername(), account.getBalance());
     }
 
+    @Transactional(readOnly = true)
+    public RecipientSummary recipient(Authentication auth, Long accountId) {
+        User user = authenticated(auth);
+        if (user.getRole() != Role.ACCOUNT_HOLDER)
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account holder role required");
+        BankAccount account = accounts.findById(accountId)
+                .filter(candidate -> !candidate.isSystemAccount())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Recipient account not found"));
+        ACCOUNT_HOLDER holder = account.getHolder();
+        if (holder.getUser().getId().equals(user.getId()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a different recipient account");
+        return new RecipientSummary(account.getId(), holder.getUser().getUsername());
+    }
+
     @Transactional
     public AccountSummary open(Authentication auth, OpenAccountRequest request) {
         User user = authenticated(auth);
@@ -62,4 +76,5 @@ public class AccountService {
     }
 
     public record AccountSummary(Long accountId, Long accountHolderId, String holderName, BigDecimal balance) { }
+    public record RecipientSummary(Long accountId, String holderName) { }
 }
