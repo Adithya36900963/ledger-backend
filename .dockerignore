@@ -1,9 +1,12 @@
+
 .git
-.github
+.gitignore
+.idea
 .vscode
-target
-error.txt
-*.log
+target/
 .env
 .env.*
 !.env.example
+*.log
+application.yml
+application.properties
