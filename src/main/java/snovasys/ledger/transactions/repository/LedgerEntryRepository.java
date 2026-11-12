@@ -10,6 +10,8 @@ import snovasys.ledger.transactions.entity.LedgerEntry;
 @Repository
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> {
     List<LedgerEntry> findByAccount_IdOrderByCreatedAtDescIdDesc(Long accountId);
+    List<LedgerEntry> findByAccount_IdAndTypeOrderByCreatedAtDescIdDesc(Long accountId, String type);
+    java.util.Optional<LedgerEntry> findFirstByTransactionIdAndAccount_IdNot(String transactionId, Long accountId);
     List<LedgerEntry> findTop200ByOrderByCreatedAtDescIdDesc();
 
     @Query("select coalesce(sum(e.amount), 0) from LedgerEntry e")

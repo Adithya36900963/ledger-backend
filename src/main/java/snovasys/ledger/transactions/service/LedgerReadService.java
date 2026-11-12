@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import snovasys.ledger.transactions.entity.LedgerEntry;
 import snovasys.ledger.transactions.model.LedgerEntryView;
 import snovasys.ledger.transactions.model.LedgerIntegrityView;
+import snovasys.ledger.transactions.model.TransferHistoryView;
 import snovasys.ledger.transactions.repository.BankAccountRepository;
 import snovasys.ledger.transactions.repository.LedgerEntryRepository;
 import snovasys.ledger.users.entity.User;
@@ -47,6 +48,29 @@ public class LedgerReadService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ledger account not found"));
         return entries.findByAccount_IdOrderByCreatedAtDescIdDesc(account.getId()).stream()
                 .map(LedgerReadService::view).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransferHistoryView> myTransfers(Authentication authentication) {
+        User user = requireUser(authentication);
+        if (user.getRole() != Role.ACCOUNT_HOLDER)
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account holder access required");
+        var holder = holders.findByUser_Id(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account holder profile not found"));
+        var account = accounts.findByHolder_Id(holder.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ledger account not found"));
+        return entries.findByAccount_IdAndTypeOrderByCreatedAtDescIdDesc(account.getId(), "TRANSFER").stream()
+                .map(entry -> entries.findFirstByTransactionIdAndAccount_IdNot(entry.getTransactionId(), account.getId())
+                        .map(counterparty -> {
+                            boolean sent = entry.getAmount().signum() < 0;
+                            var from = sent ? entry.getAccount() : counterparty.getAccount();
+                            var to = sent ? counterparty.getAccount() : entry.getAccount();
+                            String name = counterparty.getAccount().isSystemAccount() ? "System account"
+                                    : counterparty.getAccount().getHolder().getUser().getUsername();
+                            return new TransferHistoryView(entry.getTransactionId(), from.getId(), to.getId(),
+                                    counterparty.getAccount().getId(), name, entry.getAmount().abs(), entry.getCreatedAt());
+                        }).orElse(null))
+                .filter(java.util.Objects::nonNull).toList();
     }
 
     private User requireUser(Authentication authentication) {

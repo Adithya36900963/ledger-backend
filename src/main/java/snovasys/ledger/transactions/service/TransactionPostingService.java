@@ -22,6 +22,7 @@ import snovasys.ledger.users.entity.ACCOUNT_HOLDER;
 import snovasys.ledger.users.entity.User;
 import snovasys.ledger.users.models.Role;
 import snovasys.ledger.users.repository.ACCOUNT_HOLDERRepo;
+import snovasys.ledger.users.service.MpinService;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +31,7 @@ public class TransactionPostingService {
     private final LedgerEntryRepository entries;
     private final ACCOUNT_HOLDERRepo holders;
     private final AuditLogService auditLog;
+    private final MpinService mpinService;
 
     @Transactional
     public TransactionResult deposit(Authentication auth, TransactionRequest request) {
@@ -79,6 +81,7 @@ public class TransactionPostingService {
     public TransactionResult transfer(Authentication auth, TransactionRequest request) {
         User user = authenticated(auth);
         requireRole(user, Role.ACCOUNT_HOLDER);
+        mpinService.verify(user, request.getMpin());
         if (request.getDestinationAccountId() == null)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "destinationAccountId is required");
         BankAccount source = ownAccount(user, false);

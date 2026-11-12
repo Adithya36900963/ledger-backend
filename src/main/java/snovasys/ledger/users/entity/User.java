@@ -52,6 +52,9 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    @Column(name = "mpin_hash", length = 100)
+    private String mpinHash;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
