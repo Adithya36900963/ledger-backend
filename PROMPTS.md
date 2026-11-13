@@ -49,3 +49,12 @@ AI assistance is allowed for this assessment. These entries are transparent retr
 - **What was wrong:** The pasted YAML repeated top-level `spring` and `app` keys, which can cause settings to be overwritten, and included plaintext database/JWT credential values.
 - **What I changed instead:** Kept one `spring` section and one `app` section, used the existing environment-variable placeholders for secrets, and added the non-secret settings. I advised rotating the pasted credentials.
 - **Commit:** [0b67b7c — add multipart limits and local CORS origins](https://github.com/Adithya36900963/ledger-backend/commit/0b67b7c).
+
+## 2026-11-13 — Protect transfers with MPIN and idempotency (retrospective)
+
+- **What I asked:** Require a transfer amount and MPIN confirmation, and make retries unable to create more than one transaction. The transfer history must also identify the recipient account.
+- **What the tool produced:** Recipient lookup and transfer-history APIs, server-side amount validation, one-time MPIN setup with BCrypt storage and Redis attempt limiting, and a database-backed idempotency record written atomically with the ledger posting.
+- **What needed correction:** The first UI draft asked for MPIN directly in the chat composer. I clarified that Pay should open a separate secure confirmation step, and that entering a recipient account in Make a transaction should open that recipient's chat.
+- **What I changed instead:** The UI opens the recipient chat first, takes the amount in the bottom composer, and asks for MPIN in a confirmation dialog. The client sends a per-attempt idempotency key; the backend returns the original result for a matching retry and rejects reuse with different transfer details.
+- **Verification and limits:** Frontend lint/build and backend role-access tests passed in the local environment. The full backend test suite could not connect to local PostgreSQL, so database-backed behavior still requires a successful CI/deployment run. MPIN recovery/reset and live end-to-end verification remain unfinished.
+- **Commits:** [bb38f22 — server-verified MPIN](https://github.com/Adithya36900963/ledger-backend/commit/bb38f22), [993b981 — transfer idempotency and recipient lookup](https://github.com/Adithya36900963/ledger-backend/commit/993b981).
